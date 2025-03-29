@@ -1,0 +1,31 @@
+plugins {
+    id 'java'
+}
+
+group = 'org.example'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation platform('org.junit:junit-bom:5.10.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    implementation 'com.sun.mail:javax.mail:1.6.2'
+    implementation 'com.toedter:jcalendar:1.4'
+    // https://mvnrepository.com/artifact/com.google.api-client/google-api-client
+    implementation 'com.google.api-client:google-api-client:2.7.2'
+    // https://mvnrepository.com/artifact/com.google.apis/google-api-services-gmail
+    implementation 'com.google.apis:google-api-services-gmail:v1-rev110-1.25.0'
+    // https://mvnrepository.com/artifact/com.google.api-client/google-api-client-extensions
+    implementation 'com.google.api-client:google-api-client-extensions:1.6.0-beta'
+    // https://mvnrepository.com/artifact/com.google.api-client/google-api-client-java6
+    implementation 'com.google.api-client:google-api-client-java6:2.1.4'
+    // https://mvnrepository.com/artifact/com.google.oauth-client/google-oauth-client-jetty
+    implementation 'com.google.oauth-client:google-oauth-client-jetty:1.39.0'
+}
+
+test {
+    useJUnitPlatform()
+}
