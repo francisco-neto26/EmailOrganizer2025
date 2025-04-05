@@ -18,6 +18,9 @@ public class ContaEmail {
         this.porta = porta;
         this.usarSsl = usarSsl;
     }
+    public ContaEmail() {
+        // Construtor vazio para casos em que os dados serão definidos depois
+    }
 
     // Getters e Setters
     public String getEmail() { return email; }

@@ -37,6 +37,35 @@ public class RegrasClassificacao {
         padroesAssunto.add(Pattern.compile(regex, Pattern.CASE_INSENSITIVE));
     }
 
+    public boolean isEmailTrabalho(String remetente, String assunto) {
+        // Implemente a lógica para identificar emails de trabalho
+        // Por exemplo:
+        return remetente.contains("@empresa.com") ||
+                assunto.toLowerCase().contains("trabalho") ||
+                assunto.toLowerCase().contains("projeto");
+    }
+
+    public boolean isEmailFinanceiro(String remetente, String assunto) {
+        // Implemente a lógica para identificar emails financeiros
+        return remetente.contains("@banco.com") ||
+                remetente.contains("@financeira.com") ||
+                assunto.toLowerCase().contains("fatura") ||
+                assunto.toLowerCase().contains("pagamento");
+    }
+
+    public boolean isEmailRedesSociais(String remetente, String assunto) {
+        // Implemente a lógica para identificar emails de redes sociais
+        return remetente.contains("@facebook.com") ||
+                remetente.contains("@instagram.com") ||
+                remetente.contains("@twitter.com") ||
+                remetente.contains("@linkedin.com");
+    }
+
+    public boolean isEmailPromocional(String remetente, String assunto) {
+        // Pode reutilizar a lógica do isEmailMarketing ou criar uma específica
+        return isEmailMarketing(new Email("", remetente, "", assunto, "", null, false));
+    }
+
     public boolean isEmailMarketing(Email email) {
         // Verifica se o remetente contém algum dos domínios de marketing
         for (String dominio : dominiosMarketing) {

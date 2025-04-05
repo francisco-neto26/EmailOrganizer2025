@@ -3,18 +3,22 @@ package com.emailorganizer.view;
 import com.emailorganizer.model.ContaEmail;
 import com.emailorganizer.model.RegrasClassificacao;
 import com.emailorganizer.service.GmailService;
+import com.emailorganizer.utils.ConfiguracaoUtils;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.Date;
+import java.util.*;
+
+import com.toedter.calendar.JDateChooser;
+
 import java.util.List;
 import java.util.Map;
-import com.toedter.calendar.JDateChooser;
 
 public class TelaPrincipal extends JFrame {
 
@@ -34,8 +38,11 @@ public class TelaPrincipal extends JFrame {
     private JButton btnFiltrar;
     private JButton btnMarcarLido;
     private JButton btnArquivar;
+    private JButton btnSelecionarTodos;
+    private JButton btnDesmarcarTodos;
+    private JButton btnConfiguracoes;
 
-    public TelaPrincipal(ContaEmail conta, RegrasClassificacao regras, GmailService gmailService) {
+    public TelaPrincipal(ContaEmail conta, RegrasClassificacao regras,GmailService gmailService, boolean carregarEmails) {
         this.conta = conta;
         this.regras = regras;
         this.gmailService = gmailService;
@@ -43,7 +50,11 @@ public class TelaPrincipal extends JFrame {
         configurarJanela();
         inicializarComponentes();
         configurarEventos();
-        carregarEmails();
+        setVisible(true);
+
+        if (carregarEmails) {
+            carregarEmails();
+        }
     }
 
     private void configurarJanela() {
@@ -132,17 +143,28 @@ public class TelaPrincipal extends JFrame {
         painelFiltros.add(btnFiltrar, gbc);
 
         // Painel central com tabela de emails
-        String[] colunas = {"ID", "Remetente", "Assunto", "Data", "Tipo", "Status"};
-        modeloTabela = new DefaultTableModel(colunas, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return false;
-            }
-        };
-
+        modeloTabela = criarModeloTabela();
         tabelaEmails = new JTable(modeloTabela);
+
+        tabelaEmails.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                int row = tabelaEmails.rowAtPoint(e.getPoint());
+                int col = tabelaEmails.columnAtPoint(e.getPoint());
+
+                if (col == 0) return; // Deixe o usuário interagir livremente com checkboxes
+
+                // Clique na linha: desmarcar todos e marcar só a clicada
+                for (int i = 0; i < modeloTabela.getRowCount(); i++) {
+                    modeloTabela.setValueAt(false, i, 0);
+                }
+                modeloTabela.setValueAt(true, row, 0);
+            }
+        });
+
+        //tabelaEmails.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         tabelaEmails.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        tabelaEmails.getColumnModel().getColumn(0).setMaxWidth(50);
+        tabelaEmails.getColumnModel().getColumn(0).setPreferredWidth(50);
         tabelaEmails.getColumnModel().getColumn(3).setPreferredWidth(120);
         tabelaEmails.getColumnModel().getColumn(4).setPreferredWidth(100);
         tabelaEmails.getColumnModel().getColumn(5).setPreferredWidth(80);
@@ -153,9 +175,16 @@ public class TelaPrincipal extends JFrame {
         JPanel painelAcoes = new JPanel(new FlowLayout(FlowLayout.LEFT));
         btnMarcarLido = new JButton("Marcar como Lido");
         btnArquivar = new JButton("Arquivar");
+        btnSelecionarTodos = new JButton("Selecionar Todos");
+        btnDesmarcarTodos = new JButton("Desmarcar Todos");
+
+        btnConfiguracoes = new JButton("Configurações");
 
         painelAcoes.add(btnMarcarLido);
         painelAcoes.add(btnArquivar);
+        painelAcoes.add(btnSelecionarTodos);
+        painelAcoes.add(btnDesmarcarTodos);
+        painelAcoes.add(btnConfiguracoes);
 
         // Adicionar todos os painéis ao frame
         add(painelFiltros, BorderLayout.NORTH);
@@ -191,140 +220,253 @@ public class TelaPrincipal extends JFrame {
                 arquivarEmail();
             }
         });
+
+        btnSelecionarTodos.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                for (int i = 0; i < modeloTabela.getRowCount(); i++) {
+                    modeloTabela.setValueAt(true, i, 0); // Coluna 0 = checkbox de seleção
+                }
+            }
+        });
+
+        btnDesmarcarTodos.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                for (int i = 0; i < modeloTabela.getRowCount(); i++) {
+                    modeloTabela.setValueAt(false, i, 0); // Desmarca
+                }
+            }
+        });
+
+        btnConfiguracoes.addActionListener(e -> {
+            ContaEmail conta = new ContaEmail(); // ou carregue de onde você mantém
+            RegrasClassificacao regras = new RegrasClassificacao(); // idem
+            TelaConfiguracao config = new TelaConfiguracao(conta, regras);
+            config.setVisible(true);
+        });
+
     }
 
     private void carregarEmails() {
-        try {
-            // Limpar tabela atual
-            modeloTabela.setRowCount(0);
+        LoadingDialog loading = new LoadingDialog(this, "Carregando emails...");
 
-            // Usar o GmailService para carregar emails
-            List<Map<String, Object>> emails = gmailService.buscarEmails(null, null, null, null, null);
+        SwingWorker<Void, Void> worker = new SwingWorker<>() {
+            List<Map<String, Object>> emails;
 
-            // Preencher tabela com emails
-            SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy HH:mm");
-
-            for (Map<String, Object> email : emails) {
-                modeloTabela.addRow(new Object[]{
-                        email.get("id"),
-                        email.get("from"),
-                        email.get("subject"),
-                        dateFormat.format((Date)email.get("date")),
-                        email.get("type"),
-                        (Boolean)email.get("read") ? "Lido" : "Não lido"
-                });
+            @Override
+            protected Void doInBackground() {
+                try {
+                    int limite = ConfiguracaoUtils.lerLimiteEmails();
+                    emails = gmailService.buscarEmails(null, null, null, null, null, limite);
+                } catch (Exception e) {
+                    JOptionPane.showMessageDialog(TelaPrincipal.this,
+                            "Erro ao carregar emails: " + e.getMessage(),
+                            "Erro", JOptionPane.ERROR_MESSAGE);
+                    e.printStackTrace();
+                }
+                return null;
             }
 
-            JOptionPane.showMessageDialog(this,
-                    emails.size() + " emails foram carregados.",
-                    "Emails Carregados", JOptionPane.INFORMATION_MESSAGE);
+            @Override
+            protected void done() {
+                loading.dispose();
 
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(this,
-                    "Erro ao carregar emails: " + e.getMessage(),
-                    "Erro", JOptionPane.ERROR_MESSAGE);
-            e.printStackTrace();
-        }
+                if (emails != null) {
+                    preencherTabelaEmails(emails);
+
+                    JOptionPane.showMessageDialog(TelaPrincipal.this,
+                            emails.size() + " emails foram carregados.",
+                            "Emails Carregados", JOptionPane.INFORMATION_MESSAGE);
+                }
+            }
+        };
+
+        worker.execute();
+        loading.setVisible(true);
     }
 
     private void filtrarEmails() {
-        try {
-            // Obter valores dos filtros
-            String tipo = comboTipoEmail.getSelectedItem().equals("Todos") ?
-                    null : (String) comboTipoEmail.getSelectedItem();
+        String assunto = txtAssunto.getText(); // nome correto do campo
+        String remetente = txtRemetente.getText();
+        String tipo = (String) comboTipoEmail.getSelectedItem();
+        String statusSelecionado = (String) comboStatus.getSelectedItem();
+        Boolean lido = null;
 
-            String status = comboStatus.getSelectedItem().toString();
-            Boolean lido = null;
-            if (status.equals("Lido")) lido = true;
-            else if (status.equals("Não lido")) lido = false;
+        if ("Lido".equals(statusSelecionado)) {
+            lido = true;
+        } else if ("Não lido".equals(statusSelecionado)) {
+            lido = false;
+        }
 
-            String assunto = txtAssunto.getText().isEmpty() ? null : txtAssunto.getText();
-            String remetente = txtRemetente.getText().isEmpty() ? null : txtRemetente.getText();
-            Date dataInicio = dateInicio.getDate();
-            Date dataFim = dateFim.getDate();
+        Date dataDe = dateInicio.getDate();
+        Date dataAte = dateFim.getDate();
+        Date[] datas = (dataDe != null && dataAte != null) ? new Date[]{dataDe, dataAte} : null;
 
-            // Buscar emails filtrados
-            List<Map<String, Object>> emails = gmailService.buscarEmails(
-                    assunto, remetente, tipo, lido,
-                    new Date[]{dataInicio, dataFim}
-            );
+        final Boolean finalLido = lido;
+        final String finalAssunto = assunto;
+        final String finalRemetente = remetente;
+        final String finalTipo = tipo;
+        final Date[] finalDatas = datas;
 
-            // Atualizar tabela
-            modeloTabela.setRowCount(0);
-            SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy HH:mm");
+        LoadingDialog loading = new LoadingDialog(this, "Filtrando emails...");
 
-            for (Map<String, Object> email : emails) {
-                modeloTabela.addRow(new Object[]{
-                        email.get("id"),
-                        email.get("from"),
-                        email.get("subject"),
-                        dateFormat.format((Date)email.get("date")),
-                        email.get("type"),
-                        (Boolean)email.get("read") ? "Lido" : "Não lido"
-                });
+        SwingWorker<Void, Void> worker = new SwingWorker<>() {
+            List<Map<String, Object>> emails;
+
+            @Override
+            protected Void doInBackground() {
+                try {
+                    int limite = ConfiguracaoUtils.lerLimiteEmails();
+                    emails = gmailService.buscarEmails(finalAssunto, finalRemetente, finalTipo, finalLido, finalDatas, limite);
+                } catch (Exception e) {
+                    JOptionPane.showMessageDialog(TelaPrincipal.this,
+                            "Erro ao filtrar emails: " + e.getMessage(),
+                            "Erro", JOptionPane.ERROR_MESSAGE);
+                    e.printStackTrace();
+                }
+                return null;
             }
 
-            JOptionPane.showMessageDialog(this,
-                    emails.size() + " emails encontrados.",
-                    "Filtro Aplicado", JOptionPane.INFORMATION_MESSAGE);
+            @Override
+            protected void done() {
+                loading.dispose();
 
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(this,
-                    "Erro ao filtrar emails: " + e.getMessage(),
-                    "Erro", JOptionPane.ERROR_MESSAGE);
-            e.printStackTrace();
-        }
+                if (emails != null) {
+                    preencherTabelaEmails(emails);
+
+                    JOptionPane.showMessageDialog(TelaPrincipal.this,
+                            emails.size() + " emails encontrados.",
+                            "Resultado do Filtro", JOptionPane.INFORMATION_MESSAGE);
+                }
+            }
+        };
+
+        worker.execute();
+        loading.setVisible(true);
     }
 
+
     private void marcarComoLido() {
-        int linhaSelecionada = tabelaEmails.getSelectedRow();
-        if (linhaSelecionada == -1) {
-            JOptionPane.showMessageDialog(this,
-                    "Selecione um email para marcar como lido.",
-                    "Aviso", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
+        boolean encontrouMarcado = false;
 
         try {
-            String emailId = tabelaEmails.getValueAt(linhaSelecionada, 0).toString();
-            gmailService.marcarComoLido(emailId);
-            modeloTabela.setValueAt("Lido", linhaSelecionada, 5);
+            for (int i = 0; i < modeloTabela.getRowCount(); i++) {
+                Boolean marcado = (Boolean) modeloTabela.getValueAt(i, 0);
+                if (Boolean.TRUE.equals(marcado)) {
+                    encontrouMarcado = true;
 
-            JOptionPane.showMessageDialog(this,
-                    "Email marcado como lido com sucesso.",
-                    "Sucesso", JOptionPane.INFORMATION_MESSAGE);
+                    String emailId = modeloTabela.getValueAt(i, 1).toString(); // ID está na coluna 1
+                    gmailService.marcarComoLido(emailId);
+
+                    modeloTabela.setValueAt("Lido", i, 6); // Status está na coluna 6
+                }
+            }
+
+            // Se nenhum checkbox foi marcado, marca a linha selecionada
+            if (!encontrouMarcado) {
+                int linhaSelecionada = tabelaEmails.getSelectedRow();
+                if (linhaSelecionada != -1) {
+                    String emailId = modeloTabela.getValueAt(linhaSelecionada, 1).toString();
+                    gmailService.marcarComoLido(emailId);
+                    modeloTabela.setValueAt("Lido", linhaSelecionada, 6);
+                    encontrouMarcado = true;
+                }
+            }
+
+            if (encontrouMarcado) {
+                JOptionPane.showMessageDialog(this,
+                        "Email(s) marcado(s) como lido com sucesso.",
+                        "Sucesso", JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(this,
+                        "Nenhum email selecionado.",
+                        "Aviso", JOptionPane.WARNING_MESSAGE);
+            }
 
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
-                    "Erro ao marcar email como lido: " + e.getMessage(),
+                    "Erro ao marcar emails como lidos: " + e.getMessage(),
                     "Erro", JOptionPane.ERROR_MESSAGE);
             e.printStackTrace();
         }
     }
 
     private void arquivarEmail() {
-        int linhaSelecionada = tabelaEmails.getSelectedRow();
-        if (linhaSelecionada == -1) {
-            JOptionPane.showMessageDialog(this,
-                    "Selecione um email para arquivar.",
-                    "Aviso", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
+        boolean encontrouMarcado = false;
 
         try {
-            String emailId = tabelaEmails.getValueAt(linhaSelecionada, 0).toString();
-            gmailService.arquivarEmail(emailId);
-            modeloTabela.removeRow(linhaSelecionada);
+            for (int i = 0; i < modeloTabela.getRowCount(); i++) {
+                Boolean marcado = (Boolean) modeloTabela.getValueAt(i, 0);
+                if (Boolean.TRUE.equals(marcado)) {
+                    encontrouMarcado = true;
 
-            JOptionPane.showMessageDialog(this,
-                    "Email arquivado com sucesso.",
-                    "Sucesso", JOptionPane.INFORMATION_MESSAGE);
+                    String emailId = modeloTabela.getValueAt(i, 1).toString(); // ID está na coluna 1
+                    gmailService.arquivarEmail(emailId);
+
+                    modeloTabela.setValueAt("Arquivado", i, 6); // Status está na coluna 6
+                }
+            }
+
+            // Se nenhum checkbox foi marcado, tenta arquivar linha selecionada
+            if (!encontrouMarcado) {
+                int linhaSelecionada = tabelaEmails.getSelectedRow();
+                if (linhaSelecionada != -1) {
+                    String emailId = modeloTabela.getValueAt(linhaSelecionada, 1).toString();
+                    gmailService.arquivarEmail(emailId);
+                    modeloTabela.setValueAt("Arquivado", linhaSelecionada, 6);
+                    encontrouMarcado = true;
+                }
+            }
+
+            if (encontrouMarcado) {
+                JOptionPane.showMessageDialog(this,
+                        "Email(s) arquivado(s) com sucesso.",
+                        "Sucesso", JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(this,
+                        "Nenhum email selecionado para arquivar.",
+                        "Aviso", JOptionPane.WARNING_MESSAGE);
+            }
 
         } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
-                    "Erro ao arquivar email: " + e.getMessage(),
+                    "Erro ao arquivar emails: " + e.getMessage(),
                     "Erro", JOptionPane.ERROR_MESSAGE);
             e.printStackTrace();
         }
     }
+
+    private DefaultTableModel criarModeloTabela() {
+        return new DefaultTableModel(null, new String[]{"Selecionado", "ID", "Remetente", "Assunto", "Data", "Tipo", "Status"}) {
+            @Override
+            public Class<?> getColumnClass(int columnIndex) {
+                if (columnIndex == 0) return Boolean.class; // Checkbox
+                return String.class;
+            }
+
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return column == 0; // Apenas checkbox é editável
+            }
+        };
+    }
+
+    private void preencherTabelaEmails(List<Map<String, Object>> emails) {
+        modeloTabela.setRowCount(0);
+        SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy HH:mm");
+
+        for (Map<String, Object> email : emails) {
+            modeloTabela.addRow(new Object[]{
+                    false,
+                    email.get("id"),
+                    email.get("from"),
+                    email.get("subject"),
+                    dateFormat.format((Date) email.get("date")),
+                    email.get("type"),
+                    (Boolean) email.get("read") ? "Lido" : "Não lido"
+            });
+        }
+    }
+
 }

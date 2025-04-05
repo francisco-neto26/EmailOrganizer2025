@@ -2,7 +2,9 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/EmailOrganizer.iml" filepath="$PROJECT_DIR$/EmailOrganizer.iml" />
+      <module fileurl="file://$PROJECT_DIR$/EmailOrganizer2025.iml" filepath="$PROJECT_DIR$/EmailOrganizer2025.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/EmailOrganizer2025.main.iml" filepath="$PROJECT_DIR$/.idea/modules/EmailOrganizer2025.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/EmailOrganizer2025.test.iml" filepath="$PROJECT_DIR$/.idea/modules/EmailOrganizer2025.test.iml" />
     </modules>
   </component>
 </project>
