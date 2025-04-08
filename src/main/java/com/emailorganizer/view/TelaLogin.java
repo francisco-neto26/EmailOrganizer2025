@@ -1,11 +1,13 @@
 package com.emailorganizer.view;
 
 import com.emailorganizer.service.LoginService;
+import com.emailorganizer.utils.ConfiguracaoUtils;
 
 import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
 import java.io.File;
+import java.io.IOException;
 import java.util.prefs.Preferences;
 
 public class TelaLogin extends JFrame {
@@ -32,7 +34,15 @@ public class TelaLogin extends JFrame {
         txtCaminhoJson = new JTextField(30);
 
         // Carrega caminho salvo anteriormente (se houver)
-        String caminhoSalvo = prefs.get("caminho_json", "");
+
+        String caminhoSalvo = "";
+        try {
+            caminhoSalvo = ConfiguracaoUtils.lerCaminhoCredenciais();
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(this, "Erro ao ler o caminho do JSON: " + ex.getMessage(),
+                    "Erro", JOptionPane.ERROR_MESSAGE);
+        }
+
         txtCaminhoJson.setText(caminhoSalvo);
 
         JButton btnSelecionarArquivo = new JButton("Selecionar...");
@@ -46,7 +56,13 @@ public class TelaLogin extends JFrame {
             if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
                 File arquivoSelecionado = chooser.getSelectedFile();
                 txtCaminhoJson.setText(arquivoSelecionado.getAbsolutePath());
-                prefs.put("caminho_json", arquivoSelecionado.getAbsolutePath()); // Salva no registro
+                //prefs.put("caminho_json", arquivoSelecionado.getAbsolutePath());
+                try {
+                    ConfiguracaoUtils.salvarCaminhoCredenciais(arquivoSelecionado.getAbsolutePath());// Salva no registro
+                } catch (IOException ex) {
+                    JOptionPane.showMessageDialog(this, "Erro ao ler o caminho do JSON: " + ex.getMessage(),
+                            "Erro", JOptionPane.ERROR_MESSAGE);
+                }
             }
         });
 

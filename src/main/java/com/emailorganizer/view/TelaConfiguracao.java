@@ -2,9 +2,11 @@ package com.emailorganizer.view;
 
 import com.emailorganizer.model.ContaEmail;
 import com.emailorganizer.model.RegrasClassificacao;
+import com.emailorganizer.utils.ConfiguracaoUtils;
 
 import javax.swing.*;
 import java.awt.*;
+import java.io.IOException;
 import java.util.prefs.Preferences;
 
 public class TelaConfiguracao extends JDialog {
@@ -124,7 +126,7 @@ public class TelaConfiguracao extends JDialog {
         gbc.gridy = 3; abaClassificacao.add(new JScrollPane(txtPadroes), gbc);
 
         // Sub-aba 2: Limite de E-mails
-        JPanel abaLimite = criarSubAbaLimiteEmails(); // método auxiliar que criamos antes
+        JPanel abaLimite = criarSubAbaLimiteEmails(); // metodo auxiliar que criamos antes
 
         // Adicionando as abas ao tabbedPane interno
         subAbas.addTab("Regras de Classificação", abaClassificacao);
@@ -144,12 +146,25 @@ public class TelaConfiguracao extends JDialog {
 
         txtDiretorioJson = new JTextField(30);
         txtDiretorioJson.setEditable(false);
-        String caminho = prefs.get("caminho_json", "");
+        String caminho = "";
+        try {
+            caminho = ConfiguracaoUtils.lerCaminhoCredenciais();
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(this, "Erro ao ler o caminho do JSON: " + ex.getMessage(),
+                    "Erro", JOptionPane.ERROR_MESSAGE);
+        }
         txtDiretorioJson.setText(caminho);
 
         JButton btnLimpar = new JButton("Limpar caminho salvo");
         btnLimpar.addActionListener(e -> {
-            prefs.remove("caminho_json");
+            try {
+                ConfiguracaoUtils.removerCaminhoCredenciais();
+                txtDiretorioJson.setText("");
+                JOptionPane.showMessageDialog(this, "Caminho removido com sucesso do Registro.", "Sucesso", JOptionPane.INFORMATION_MESSAGE);
+            } catch (IOException ex) {
+                JOptionPane.showMessageDialog(this, "Erro ao remover caminho do JSON: " + ex.getMessage(),
+                        "Erro", JOptionPane.ERROR_MESSAGE);
+            }
             txtDiretorioJson.setText("");
             JOptionPane.showMessageDialog(this, "Caminho removido com sucesso do Registro.", "Sucesso", JOptionPane.INFORMATION_MESSAGE);
         });
@@ -191,10 +206,15 @@ public class TelaConfiguracao extends JDialog {
                 throw new NumberFormatException("O limite deve estar entre 1 e 500.");
             }
 
-            Preferences prefs = Preferences.userRoot().node("EmailOrganizer");
-            int limiteAtual = prefs.getInt("limite_emails", 100);
+            int limiteAtual = ConfiguracaoUtils.lerLimiteEmails();
             if (limiteAtual != novoLimite) {
-                prefs.putInt("limite_emails", novoLimite);
+                try {
+                    ConfiguracaoUtils.salvarLimiteEmails(novoLimite);
+                } catch (IOException e) {
+                    JOptionPane.showMessageDialog(this, "Erro ao salvar o limite de e-mails: " + e.getMessage(),
+                            "Erro", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
             }
 
             JOptionPane.showMessageDialog(this,
@@ -222,7 +242,13 @@ public class TelaConfiguracao extends JDialog {
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
         txtLimiteEmails = new JTextField(5);
-        int limiteSalvo = prefs.getInt("limite_emails", 100); // padrão
+        int limiteSalvo = 100; // valor padrão
+
+        try {
+            limiteSalvo = ConfiguracaoUtils.lerLimiteEmails();
+        } catch (IOException e) {
+            JOptionPane.showMessageDialog(this, "Erro ao carregar limite salvo. Usando padrão (100).", "Aviso", JOptionPane.WARNING_MESSAGE);
+        }
         txtLimiteEmails.setText(String.valueOf(limiteSalvo));
 
         gbc.gridx = 0; gbc.gridy = 0;

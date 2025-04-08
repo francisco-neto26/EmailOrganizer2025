@@ -41,6 +41,7 @@ public class TelaPrincipal extends JFrame {
     private JButton btnSelecionarTodos;
     private JButton btnDesmarcarTodos;
     private JButton btnConfiguracoes;
+    private JButton btnExcluir;
 
     public TelaPrincipal(ContaEmail conta, RegrasClassificacao regras,GmailService gmailService, boolean carregarEmails) {
         this.conta = conta;
@@ -175,13 +176,14 @@ public class TelaPrincipal extends JFrame {
         JPanel painelAcoes = new JPanel(new FlowLayout(FlowLayout.LEFT));
         btnMarcarLido = new JButton("Marcar como Lido");
         btnArquivar = new JButton("Arquivar");
+        btnExcluir = new JButton("Excluir");
         btnSelecionarTodos = new JButton("Selecionar Todos");
         btnDesmarcarTodos = new JButton("Desmarcar Todos");
-
         btnConfiguracoes = new JButton("Configurações");
 
         painelAcoes.add(btnMarcarLido);
         painelAcoes.add(btnArquivar);
+        painelAcoes.add(btnExcluir);
         painelAcoes.add(btnSelecionarTodos);
         painelAcoes.add(btnDesmarcarTodos);
         painelAcoes.add(btnConfiguracoes);
@@ -218,6 +220,13 @@ public class TelaPrincipal extends JFrame {
             @Override
             public void actionPerformed(ActionEvent e) {
                 arquivarEmail();
+            }
+        });
+
+        btnExcluir.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                excluirEmail();
             }
         });
 
@@ -287,7 +296,7 @@ public class TelaPrincipal extends JFrame {
     }
 
     private void filtrarEmails() {
-        String assunto = txtAssunto.getText(); // nome correto do campo
+        String assunto = txtAssunto.getText();
         String remetente = txtRemetente.getText();
         String tipo = (String) comboTipoEmail.getSelectedItem();
         String statusSelecionado = (String) comboStatus.getSelectedItem();
@@ -435,6 +444,53 @@ public class TelaPrincipal extends JFrame {
                     "Erro", JOptionPane.ERROR_MESSAGE);
             e.printStackTrace();
         }
+    }
+
+    private void excluirEmail() {
+        boolean encontrouMarcado = false;
+        List<String> idsParaExcluir = new ArrayList<>();
+
+        // Coleta os IDs dos emails marcados
+        for (int i = 0; i < modeloTabela.getRowCount(); i++) {
+            Boolean marcado = (Boolean) modeloTabela.getValueAt(i, 0);
+            if (Boolean.TRUE.equals(marcado)) {
+                encontrouMarcado = true;
+                String emailId = modeloTabela.getValueAt(i, 1).toString(); // ID na coluna 1
+                idsParaExcluir.add(emailId);
+            }
+        }
+
+        // Se nada foi marcado, tenta excluir o email da linha selecionada
+        if (!encontrouMarcado) {
+            int linhaSelecionada = tabelaEmails.getSelectedRow();
+            if (linhaSelecionada != -1) {
+                String emailId = modeloTabela.getValueAt(linhaSelecionada, 1).toString();
+                idsParaExcluir.add(emailId);
+                encontrouMarcado = true;
+            }
+        }
+
+        if (!encontrouMarcado) {
+            JOptionPane.showMessageDialog(this, "Nenhum email selecionado para exclusão.", "Aviso", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        // Confirma a exclusão
+        int opcao = JOptionPane.showConfirmDialog(this, "Tem certeza que deseja excluir o(s) email(s) selecionado(s)?", "Confirmar Exclusão", JOptionPane.YES_NO_OPTION);
+        if (opcao != JOptionPane.YES_OPTION) return;
+
+        // Exclui os emails
+        for (String emailId : idsParaExcluir) {
+            try {
+                gmailService.excluirEmail(emailId); // Implementar no seu serviço
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(this, "Erro ao excluir o e-mail ID: " + emailId + "\n" + e.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
+                e.printStackTrace();
+            }
+        }
+
+        // Atualiza a tela usando o fitro ja definido
+        filtrarEmails();
     }
 
     private DefaultTableModel criarModeloTabela() {

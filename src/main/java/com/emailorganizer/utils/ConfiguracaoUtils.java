@@ -3,6 +3,7 @@ package com.emailorganizer.utils;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.charset.Charset;
 
 public class ConfiguracaoUtils {
 
@@ -29,11 +30,14 @@ public class ConfiguracaoUtils {
                 .redirectErrorStream(true)
                 .start();
 
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(processo.getInputStream()))) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(processo.getInputStream(), Charset.forName("Cp850")))) {
             String linha;
             while ((linha = reader.readLine()) != null) {
                 if (linha.contains(chave)) {
-                    return linha.split("\\s{2,}")[2].trim();
+                    String[] partes = linha.trim().split("\\s{2,}");
+                    if (partes.length >= 3) {
+                        return partes[2].trim();
+                    }
                 }
             }
         }
@@ -47,9 +51,25 @@ public class ConfiguracaoUtils {
     }
 
     private static void executarComando(String comando) throws IOException {
-        new ProcessBuilder("cmd.exe", "/c", comando)
+        Process processo = new ProcessBuilder("cmd.exe", "/c", comando)
                 .redirectErrorStream(true)
                 .start();
+
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(processo.getInputStream()))) {
+            String linha;
+            StringBuilder saida = new StringBuilder();
+            while ((linha = reader.readLine()) != null) {
+                saida.append(linha).append("\n");
+            }
+
+            int exitCode = processo.waitFor();
+            if (exitCode != 0) {
+                throw new IOException("Erro ao executar comando do registro. Código de saída: " + exitCode + "\nSaída: " + saida);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Execução interrompida: " + e.getMessage(), e);
+        }
     }
 
     // ========================
@@ -82,7 +102,7 @@ public class ConfiguracaoUtils {
     public static int lerLimiteEmails() throws IOException {
         String valor = lerValorRegistro(CHAVE_LIMITE_EMAILS);
         try {
-            int limite = Integer.parseInt(valor);
+            int limite = Integer.parseInt(valor.trim()); // <<< importante usar trim()
             if (limite < 1 || limite > LIMITE_EMAILS_MAXIMO) {
                 return LIMITE_EMAILS_PADRAO;
             }

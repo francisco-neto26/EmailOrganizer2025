@@ -8,6 +8,7 @@ import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
 import com.google.api.services.gmail.Gmail;
 import com.google.api.services.gmail.model.*;
 
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.Base64;
 import javax.mail.Session;
@@ -33,23 +34,6 @@ public class GmailService {
     public void inicializar() throws Exception {
         GmailOAuthHelper oAuthHelper = new GmailOAuthHelper(flow, "EmailOrganizer");
         this.service = oAuthHelper.getGmailService();
-    }
-
-    public List<Email> buscarEmailsNaoLidos() throws Exception {
-        if (service == null) inicializar();
-
-        ListMessagesResponse response = service.users().messages().list("me")
-                .setQ("is:unread")
-                .execute();
-
-        List<Email> emails = new ArrayList<>();
-        if (response.getMessages() != null) {
-            for (Message msg : response.getMessages()) {
-                Message fullMessage = service.users().messages().get("me", msg.getId()).execute();
-                emails.add(converterParaEmail(fullMessage));
-            }
-        }
-        return emails;
     }
 
     private Email converterParaEmail(Message message) throws Exception {
@@ -94,8 +78,13 @@ public class GmailService {
         if (service == null) inicializar();
         service.users().messages().modify("me", emailId,
                 new ModifyMessageRequest()
-                        .setAddLabelIds(Collections.singletonList("ARCHIVE"))
+                        //.setAddLabelIds(Collections.singletonList("ARCHIVE"))
                         .setRemoveLabelIds(Collections.singletonList("INBOX"))).execute();
+    }
+
+    public void excluirEmail(String emailId) throws Exception {
+        if (service == null) inicializar();
+        service.users().messages().trash("me", emailId).execute();
     }
 
     public List<Map<String, Object>> buscarEmails(String assunto, String remetente,
@@ -103,48 +92,86 @@ public class GmailService {
                                                   int limite) throws Exception {
         if (service == null) inicializar();
 
+        System.out.println("\n[DEBUG] === Início da busca de e-mails ===");
+        System.out.println("[DEBUG] Assunto: " + assunto);
+        System.out.println("[DEBUG] Remetente: " + remetente);
+        System.out.println("[DEBUG] Tipo: " + tipo);
+        System.out.println("[DEBUG] Status (lido): " + lido);
+        System.out.println("[DEBUG] Data De: " + (dataRange != null ? dataRange[0] : "null"));
+        System.out.println("[DEBUG] Data Até: " + (dataRange != null ? dataRange[1] : "null"));
+        System.out.println("[DEBUG] Limite: " + limite);
+
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd");
         StringBuilder query = new StringBuilder();
+
         if (assunto != null && !assunto.isEmpty()) query.append("subject:").append(assunto).append(" ");
         if (remetente != null && !remetente.isEmpty()) query.append("from:").append(remetente).append(" ");
         if (lido != null) query.append(lido ? "is:read " : "is:unread ");
 
+        if (dataRange != null && dataRange.length == 2) {
+            if (dataRange[0] != null) query.append("after:").append(sdf.format(dataRange[0])).append(" ");
+            if (dataRange[1] != null) {
+                Calendar cal = Calendar.getInstance();
+                cal.setTime(dataRange[1]);
+                cal.add(Calendar.DAY_OF_MONTH, 1); // inclui o último dia
+                query.append("before:").append(sdf.format(cal.getTime())).append(" ");
+            }
+        }
+
+        System.out.println("[DEBUG] Query final da API: \"" + query.toString().trim() + "\"");
+
         ListMessagesResponse response = service.users().messages().list("me")
-                .setQ(query.toString())
+                .setQ(query.toString().trim())
+                .setMaxResults((long) limite)
                 .execute();
 
         List<Map<String, Object>> resultados = new ArrayList<>();
+        int totalRetornados = 0;
+        int puladosPorData = 0;
+        int puladosPorTipo = 0;
+
         if (response.getMessages() != null) {
             for (Message msg : response.getMessages()) {
                 if (resultados.size() >= limite) break;
 
                 Message full = service.users().messages().get("me", msg.getId()).execute();
+                totalRetornados++;
+
                 Map<String, Object> mapa = new HashMap<>();
                 mapa.put("id", full.getId());
 
+                String from = "", subject = "";
                 for (MessagePartHeader header : full.getPayload().getHeaders()) {
-                    if ("From".equalsIgnoreCase(header.getName())) mapa.put("from", header.getValue());
-                    if ("Subject".equalsIgnoreCase(header.getName())) mapa.put("subject", header.getValue());
+                    if ("From".equalsIgnoreCase(header.getName())) from = header.getValue();
+                    if ("Subject".equalsIgnoreCase(header.getName())) subject = header.getValue();
                 }
 
                 Date data = new Date(full.getInternalDate());
-                mapa.put("date", data);
-
-                if (dataRange != null && dataRange.length == 2) {
-                    if (dataRange[0] != null && data.before(dataRange[0])) continue;
-                    if (dataRange[1] != null && data.after(dataRange[1])) continue;
-                }
-
                 boolean isRead = !full.getLabelIds().contains("UNREAD");
+
+                mapa.put("from", from);
+                mapa.put("subject", subject);
+                mapa.put("date", data);
                 mapa.put("read", isRead);
 
-                String tipoEmail = classificarEmail((String) mapa.get("from"), (String) mapa.get("subject"));
+                String tipoEmail = classificarEmail(from, subject);
                 mapa.put("type", tipoEmail);
 
-                if (tipo != null && !tipo.equals(tipoEmail)) continue;
+                //System.out.println("[EMAIL] Data: " + data + " | Assunto: " + subject + " | Tipo: " + tipoEmail);
+
+                if (tipo != null && !"Todos".equalsIgnoreCase(tipo) && !tipo.equals(tipoEmail)) {
+                    puladosPorTipo++;
+                    continue;
+                }
 
                 resultados.add(mapa);
             }
         }
+
+        System.out.println("[DEBUG] Total retornados da API: " + totalRetornados);
+        System.out.println("[DEBUG] Incluídos no resultado final: " + resultados.size());
+        System.out.println("[DEBUG] Pulados por tipo: " + puladosPorTipo);
+        System.out.println("[DEBUG] === Fim da busca ===\n");
 
         return resultados;
     }
