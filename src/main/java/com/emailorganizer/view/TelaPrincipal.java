@@ -4,6 +4,7 @@ import com.emailorganizer.model.ContaEmail;
 import com.emailorganizer.model.RegrasClassificacao;
 import com.emailorganizer.service.GmailService;
 import com.emailorganizer.utils.ConfiguracaoUtils;
+import com.emailorganizer.service.EmailAutomatorService;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -25,6 +26,7 @@ public class TelaPrincipal extends JFrame {
     private ContaEmail conta;
     private RegrasClassificacao regras;
     private GmailService gmailService;
+    private EmailAutomatorService emailAutomatorService;
 
     // Componentes da UI
     private JTable tabelaEmails;
@@ -42,12 +44,18 @@ public class TelaPrincipal extends JFrame {
     private JButton btnDesmarcarTodos;
     private JButton btnConfiguracoes;
     private JButton btnExcluir;
+    private JButton btnAutoMarcarLido;
+    private JLabel lblStatus;
+    private static TelaPrincipal instancia;
+    private JProgressBar progressBar;
 
-    public TelaPrincipal(ContaEmail conta, RegrasClassificacao regras,GmailService gmailService, boolean carregarEmails) {
+    public TelaPrincipal(ContaEmail conta, RegrasClassificacao regras,GmailService gmailService, EmailAutomatorService emailAutomatorService,boolean carregarEmails) {
         this.conta = conta;
         this.regras = regras;
         this.gmailService = gmailService;
-
+        this.emailAutomatorService = emailAutomatorService;
+        instancia = this;
+        lblStatus = new JLabel("Pronto");
         configurarJanela();
         inicializarComponentes();
         configurarEventos();
@@ -56,6 +64,18 @@ public class TelaPrincipal extends JFrame {
         if (carregarEmails) {
             carregarEmails();
         }
+    }
+    public static TelaPrincipal getInstance() {
+        return instancia;
+    }
+
+    public void atualizarStatus(String texto) {
+        SwingUtilities.invokeLater(() -> {
+            if (lblStatus != null) {
+                lblStatus.setText(texto);
+                lblStatus.paintImmediately(lblStatus.getBounds());
+            }
+        });
     }
 
     private void configurarJanela() {
@@ -180,6 +200,7 @@ public class TelaPrincipal extends JFrame {
         btnSelecionarTodos = new JButton("Selecionar Todos");
         btnDesmarcarTodos = new JButton("Desmarcar Todos");
         btnConfiguracoes = new JButton("Configurações");
+        btnAutoMarcarLido = new JButton("Auto Marcar Lido");
 
         painelAcoes.add(btnMarcarLido);
         painelAcoes.add(btnArquivar);
@@ -187,11 +208,30 @@ public class TelaPrincipal extends JFrame {
         painelAcoes.add(btnSelecionarTodos);
         painelAcoes.add(btnDesmarcarTodos);
         painelAcoes.add(btnConfiguracoes);
+        painelAcoes.add(btnAutoMarcarLido);
 
         // Adicionar todos os painéis ao frame
         add(painelFiltros, BorderLayout.NORTH);
         add(scrollTabela, BorderLayout.CENTER);
-        add(painelAcoes, BorderLayout.SOUTH);
+
+        JPanel painelInferior = new JPanel();
+        painelInferior.setLayout(new BorderLayout());
+        painelInferior.add(painelAcoes, BorderLayout.NORTH);
+        add(painelInferior, BorderLayout.SOUTH);
+    }
+
+    public void iniciarProcessamentoLongo() {
+        SwingUtilities.invokeLater(() -> {
+            progressBar.setVisible(true);
+            btnAutoMarcarLido.setEnabled(false);  // Desabilitar o botão enquanto processa
+        });
+    }
+
+    public void finalizarProcessamentoLongo() {
+        SwingUtilities.invokeLater(() -> {
+            progressBar.setVisible(false);
+            btnAutoMarcarLido.setEnabled(true);  // Reabilitar o botão
+        });
     }
 
     private Date getDataInicial() {
@@ -253,6 +293,47 @@ public class TelaPrincipal extends JFrame {
             RegrasClassificacao regras = new RegrasClassificacao(); // idem
             TelaConfiguracao config = new TelaConfiguracao(conta, regras);
             config.setVisible(true);
+        });
+
+        btnAutoMarcarLido.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                btnAutoMarcarLido.setEnabled(false); // Desabilitar o botão durante processamento
+
+                new Thread(() -> {
+                    try {
+                        int total = emailAutomatorService.marcarComoLidosEContarRemetentes();
+
+                        // Mostrar resultado na thread da UI
+                        SwingUtilities.invokeLater(() -> {
+                            JOptionPane.showMessageDialog(
+                                    TelaPrincipal.this,
+                                    "Processamento concluído com sucesso!\n" +
+                                            "Total de e-mails processados: " + total,
+                                    "Sucesso",
+                                    JOptionPane.INFORMATION_MESSAGE
+                            );
+                            btnAutoMarcarLido.setEnabled(true); // Reabilitar o botão
+                            // Opcionalmente recarregar os e-mails
+                            filtrarEmails();
+                        });
+
+                    } catch (Exception ex) {
+                        ex.printStackTrace();
+
+                        // Mostrar erro na thread da UI
+                        SwingUtilities.invokeLater(() -> {
+                            JOptionPane.showMessageDialog(
+                                    TelaPrincipal.this,
+                                    "Erro durante o processamento:\n" + ex.getMessage(),
+                                    "Erro",
+                                    JOptionPane.ERROR_MESSAGE
+                            );
+                            btnAutoMarcarLido.setEnabled(true); // Reabilitar o botão
+                        });
+                    }
+                }).start();
+            }
         });
 
     }

@@ -56,14 +56,18 @@ public class LoginService {
         GmailService gmailService = new GmailService(conta, regras, flow);
         gmailService.inicializar();
 
+// Tela de seleção inicial
         TelaSelecaoInicial selecao = new TelaSelecaoInicial(null);
         selecao.setVisible(true);
 
         boolean carregarEmails = selecao.isCarregarEmails();
 
-        TelaPrincipal principal = new TelaPrincipal(conta, regras, gmailService,carregarEmails);
-        principal.setVisible(true);
+// Serviço de automação de e-mails
+        EmailAutomatorService emailAutomatorService = new EmailAutomatorService(gmailService);
 
+// Criação da tela principal com os 5 argumentos
+        TelaPrincipal principal = new TelaPrincipal(conta, regras, gmailService, emailAutomatorService, carregarEmails);
+        principal.setVisible(true);
 
     }
 }

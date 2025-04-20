@@ -25,6 +25,10 @@ public class GmailService {
     private final GoogleAuthorizationCodeFlow flow;
     private Gmail service;
 
+    public Gmail getGmail() {
+        return this.service;
+    }
+
     public GmailService(ContaEmail contaEmail, RegrasClassificacao regras, GoogleAuthorizationCodeFlow flow) {
         this.contaEmail = contaEmail;
         this.regras = regras;
